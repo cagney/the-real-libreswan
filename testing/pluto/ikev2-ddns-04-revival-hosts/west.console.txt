@@ -1,0 +1,48 @@
+/testing/guestbin/prep.sh
+'ipsec.conf' -> '/etc/ipsec.conf'
+'ipsec.secrets' -> '/etc/ipsec.secrets'
+west #
+ ../../guestbin/mount-bind.sh /etc/hosts /etc/hosts
+/etc/hosts /tmp/hosts.west.ikev2-ddns-04-revival-hosts /etc/hosts
+west #
+ echo "192.1.2.23 right.libreswan.org" >> /etc/hosts
+west #
+ ipsec start
+Redirecting to: [initsystem]
+west #
+ ../../guestbin/wait-until-pluto-started
+west #
+ ipsec add named
+"named": added oriented IKEv2 connection
+west #
+ ipsec up named
+"named" #1: initiating IKEv2 connection to 192.1.2.23 (right.libreswan.org) using UDP
+"named" #1: sent IKE_SA_INIT request to 192.1.2.23:UDP/500
+"named" #1: processed IKE_SA_INIT response from 192.1.2.23:UDP/500 {cipher=AES_GCM_16_256 integ=n/a prf=HMAC_SHA2_512 group=DH19}, initiating IKE_AUTH
+"named" #1: sent IKE_AUTH request to 192.1.2.23:UDP/500 with shared-key-mac and FQDN '@west'; Child SA #2 {ESP <0xESPESP}
+"named" #1: processing IKE_AUTH response from 192.1.2.23:UDP/500 containing SK{IDr,AUTH,SA,TSi,TSr}
+"named" #1: initiator established IKE SA; authenticated peer using authby=secret and FQDN '@east'
+"named" #2: initiator established Child SA using #1; IPsec tunnel [192.0.1.0/24===192.0.2.0/24] {ESP/ESN=>0xESPESP <0xESPESP xfrm=AES_GCM_16_256 DPD=passive}
+west #
+ cp /etc/hosts /tmp/west.hosts
+west #
+ sed -e '/right.libreswan.org/ s/.*/192.0.1.0 right.libreswan.org/' /tmp/west.hosts > /etc/hosts
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named" #2: connection is supposed to remain up'
+"named" #2: connection is supposed to remain up; revival attempt 1 scheduled in 0 seconds
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named" #3: initiating IKEv2 connection'
+"named" #3: initiating IKEv2 connection to 192.1.2.23 (right.libreswan.org) using UDP
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named" #3: scheduling DDNS lookup'
+"named" #3: scheduling DDNS lookup
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named" #3: deleting IKE SA'
+"named" #3: deleting IKE SA (sent IKE_SA_INIT request)
+west #
+ sleep 5
+west #
+ ipsec whack --ddns
+updating pending dns lookups
+"named" #4: initiating IKEv2 connection to 192.0.1.0 (right.libreswan.org) using UDP
+west #
