@@ -65,18 +65,6 @@ static bool connection_check_ddns1(struct connection *c,
 		return false;
 	}
 
-	/*
-	 * We do not update a resolved address once resolved.  That might
-	 * be considered a bug.  Can we count on liveness if the target
-	 * changed IP?  The connection might need to get its host_addr
-	 * updated.  Do we do that when terminating the conn?
-	 */
-	if (address_is_specified(c->local->host.addr) &&
-	    address_is_specified(c->remote->host.addr)) {
-		vdbg("skipping connection %s, already has addresses", c->name);
-		return false;
-	}
-
 	/* should have been handled by above is_permanent() */
 	if (pbad(id_has_wildcards(&c->remote->host.id))) {
 		vdbg("skipping connection %s, remote has wildcard ID", c->name);
@@ -84,11 +72,36 @@ static bool connection_check_ddns1(struct connection *c,
 	}
 
 	/*
+	 * We do not update a resolved address once resolved.  That
+	 * might be considered a bug.  Can we count on liveness if the
+	 * target changed IP?  The connection might need to get its
+	 * host_addr updated.  Do we do that when terminating the
+	 * conn?
+	 *
+	 * Pre-revival was leave remote untouched; with revival it
+	 * stumbles on.
+	 *
+	 * XXX: does local address matter?  Connection can be oriented
+	 * with local address but still need DDNS.
+	 */
+
+	if (address_is_specified(c->local->host.addr) &&
+	    c->revival.attempt == 0) {
+		vdbg("skipping connection %s, already has local addresses (and not reviving)", c->name);
+		return false;
+	}
+
+	if (address_is_specified(c->remote->host.addr) &&
+	    c->revival.attempt == 0) {
+		vdbg("skipping connection %s, already has remote addresses (and not reviving)", c->name);
+		return false;
+	}
+
+	/*
 	 * Do not touch what is not broken.
 	 *
-	 * XXX: Can this happen?  Above has rejected any connection
-	 * with a valid .remote .host .addr, and having that is a
-	 * requirement for establishing a connection?
+	 * XXX: Can this happen?  Perhaps revival was triggered and
+	 * succeeded while DDNS event was still pending?
 	 */
 	struct ike_sa *established_ike = ike_sa_by_serialno(c->established_ike_sa);
 	if (established_ike != NULL) {
@@ -108,7 +121,7 @@ static bool connection_check_ddns1(struct connection *c,
 	 * current SPDs, and then delete the SPDs.
 	 *
 	 * Remember, per above, the connection isn't established.
-
+	 *
 	 * XXX: since the connection has at least one unknown
 	 * addresses is it even oriented or routed?  Lets find out.
 	 *
