@@ -90,81 +90,32 @@ static void jam_clean_xauth_username(struct jambuf *buf,
 }
 
 /*
- * build updown's environment; strings are saved in JB.
+ * build updown's environment
  *
  * note: this mutates *st by calling get_sa_bundle_info().
+ *
  */
 
-struct updown_exec {
+struct updown_environ {
 	char buffer[2048];
 	const char *env[100];
-	char **argv;
 };
 
-static char **argv_from_shunks(struct shunks *args)
+static bool build_updown_environ(struct updown_environ *environ,
+				 const char *verb, const char *verb_suffix,
+				 const struct connection *c,
+				 const struct spd *sr,
+				 struct child_sa *child,
+				 struct updown_env updown_env,
+				 struct verbose verbose/*C-or-CHILD*/)
 {
-	/* get space needed for strings */
-	size_t chars = 0;
-	ITEMS_FOR_EACH(s, args) {
-		chars += s->len+1/*NUL*/;
-	}
-	/* argv[] array + NULL; NULL terminated strings */
-	char **argv = overalloc_things(char *, args->len+1, chars);
-	char **argv_roof = argv + args->len + 1;
-	char *p = (char*) argv_roof;
-	/* copy over */
-	unsigned i = 0;
-	ITEMS_FOR_EACH(s, args) {
-		argv[i++] = p;
-		memcpy(p, s->ptr, s->len);
-		p += s->len + 1/*NUL*/;
-	}
-	pmemory(argv);
-	return argv;
-}
-
-static char **argv_from_string(const char *command)
-{
-	struct shunks *args = ttoshunks(shunk1(command), " ", EAT_EMPTY_SHUNKS);
-	if (args == NULL) {
-		return NULL;
-	}
-	char **argv = argv_from_shunks(args);
-	pfree(args);
-	return argv;
-}
-
-static bool build_updown_exec(struct updown_exec *exec,
-			      const char *verb, const char *verb_suffix,
-			      const struct connection *c,
-			      const struct spd *sr,
-			      struct child_sa *child,
-			      struct updown_env updown_env,
-			      struct verbose verbose/*C-or-CHILD*/)
-{
-	/*
-	 * Build argv[]
-	 */
-	if (c->local->config->child.updown.updown_config_exec) {
-		exec->argv = argv_from_string(c->local->config->child.updown.command);
-	} else {
-		struct shunks *args = alloc_items(struct shunks, 3);
-		unsigned i = 0;
-		args->item[i++] = shunk1("/bin/sh");
-		args->item[i++] = shunk1("-c");
-		args->item[i++] = shunk1(c->local->config->child.updown.command);
-		vassert(i == args->len);
-		exec->argv = argv_from_shunks(args);
-		pfree(args);
-	}
-
 	/*
 	 * Build envp[]
 	 */
-	struct jambuf jb = ARRAY_AS_JAMBUF(exec->buffer);
-	const char **envp = exec->env;
+	struct jambuf jb = ARRAY_AS_JAMBUF(environ->buffer);
+	const char **envp = environ->env;
 	/* leave space for trailing NULL */
-	const char **envp_end = envp + elemsof(exec->env) - 1;
+	const char **envp_end = envp + elemsof(environ->env) - 1;
 
 	const bool tunneling = (c->config->child.encap_mode == ENCAP_MODE_TUNNEL);
 
@@ -408,7 +359,7 @@ static bool do_updown_verb(const char *verb,
 	 * busy servers that do not need to use updown for anything.
 	 * Same for never_negotiate().
 	 */
-	if (c->local->config->child.updown.command == NULL) {
+	if (c->local->config->child.updown.argv == NULL) {
 		vdbg("skipped updown command - disabled per policy");
 		return true;
 	}
@@ -420,7 +371,7 @@ static bool do_updown_verb(const char *verb,
 		     str_selector_pair(&spd->local->client, &spd->remote->client, &sb));
 	} else {
 		vdbg("kernel: running updown command \"%s\" for verb %s ",
-		     c->local->config->child.updown.command, verb);
+		     c->local->config->child.updown.argv[0], verb);
 	}
 
 	/*
@@ -471,16 +422,16 @@ static bool do_updown_verb(const char *verb,
 	}
 
 	vdbg("kernel: command executing %s%s", verb, verb_suffix);
-	struct updown_exec exec;
-	if (!build_updown_exec(&exec, verb, verb_suffix, c, spd,
-			       child, updown_env, verbose)) {
-		vlog("%s%s command too long!", verb,
-		     verb_suffix);
+	struct updown_environ environ;
+	if (!build_updown_environ(&environ, verb, verb_suffix, c, spd,
+				  child, updown_env, verbose)) {
+		vlog("%s%s command too long!", verb, verb_suffix);
 		return false;
 	}
 
-	bool ok = server_runve(verb, (const char**) exec.argv, exec.env, verbose);
-	pfree(exec.argv);
+	bool ok = server_runve(verb,
+			       (const char**) c->local->config->child.updown.argv,
+			       environ.env, verbose);
 	return ok;
 }
 
@@ -616,6 +567,7 @@ stf_status updown_async_callback(struct state *st,
 bool updown_async_child(bool prepare, bool route, bool up,
 			struct child_sa *child)
 {
+	struct connection *c = child->sa.st_connection;
 	char verb[sizeof("prepare-route-up")];
 	snprintf(verb, sizeof(verb),
 		 "%s%s%s%s%s",
@@ -626,23 +578,26 @@ bool updown_async_child(bool prepare, bool route, bool up,
 		 (up ? "up" : ""));
 
 	struct verbose verbose = VERBOSE(DEBUG_STREAM, child->sa.logger, verb);
-	struct updown_exec exec;
-	if (!build_updown_exec(&exec, verb, /*verb_suffix*/"",
-			       child->sa.st_connection,
-			       /*spd*/child->sa.st_connection->child.spds.list,
-			       child,
-			       (struct updown_env) {0},
-			       verbose)) {
+	struct updown_environ environ;
+	if (!build_updown_environ(&environ, verb, /*verb_suffix*/"",
+				  child->sa.st_connection,
+				  /*spd*/child->sa.st_connection->child.spds.list,
+				  child,
+				  (struct updown_env) {0},
+				  verbose)) {
 		return false;
 	}
 
-	server_fork_exec(exec.argv[0], exec.argv, (char**)exec.env,
+
+	server_fork_exec(c->local->config->child.updown.argv[0],
+			 c->local->config->child.updown.argv,
+			 (char**)environ.env,
 			 /*input*/null_shunk,
 			 ALL_STREAMS,
 			 updown_async_callback,
 			 /*callback_context*/NULL,
 			 child->sa.logger);
-	pfree(exec.argv);
+
 	return true;
 }
 
@@ -683,10 +638,18 @@ void jam_updown_status(struct jambuf *buf, const char *prefix,
 	jam_string(buf, " ");
 	jam_string(buf, prefix);
 	jam_string(buf, "updown=");
-	if (end->config->child.updown.command == NULL) {
+	if (end->config->child.updown.argv == NULL) {
 		jam_string(buf, "<disabled>");
+	} else if (end->config->child.updown.updown_config_exec) {
+		const char *sep = "";
+		for (char **p = end->config->child.updown.argv;
+		     *p != NULL; p++) {
+			jam_string(buf, sep); sep = " ";
+			jam_string(buf, *p);
+		}
 	} else {
-		jam_string(buf, end->config->child.updown.command);
+		/* as in /bin/sh -c <UPDOWN_SHELL_ARG> */
+		jam_string(buf, end->config->child.updown.argv[UPDOWN_SHELL_ARG]);
 	}
 	jam_string(buf, ";");
 	/* PREFIX-updown-config= */

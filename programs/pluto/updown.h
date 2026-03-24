@@ -123,4 +123,7 @@ extern const char *pluto_dns_resolver;
 void jam_updown_status(struct jambuf *buf, const char *prefix,
 		       const struct connection_end *end);
 
+/* as in /bin/sh -c <ARG> */
+#define UPDOWN_SHELL_ARG 2
+
 #endif

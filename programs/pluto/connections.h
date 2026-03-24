@@ -143,12 +143,8 @@ struct child_end_config {
 	const char *leftright;
 	ip_protoport protoport;
 
-	/*
-	 * XXX: should command be pre-sliced ready for passing to
-	 * execve() (depending on exec option).
-	 */
 	struct {
-		char *command;
+		char **argv;
 		bool updown_config[UPDOWN_CONFIG_ROOF];
 	} updown;
 

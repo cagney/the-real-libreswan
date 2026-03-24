@@ -572,6 +572,110 @@ static diag_t extract_flags(struct kv kv,
 	return NULL;
 }
 
+static char **argv_from_shunks(struct shunks *args)
+{
+	/* get space needed for strings */
+	size_t chars = 0;
+	ITEMS_FOR_EACH(s, args) {
+		chars += s->len+1/*NUL*/;
+	}
+	/* argv[] array + NULL; NULL terminated strings */
+	char **argv = overalloc_things(char *, args->len+1, chars);
+	char **argv_roof = argv + args->len + 1;
+	char *p = (char*) argv_roof;
+	/* copy over */
+	unsigned i = 0;
+	ITEMS_FOR_EACH(s, args) {
+		argv[i++] = p;
+		memcpy(p, s->ptr, s->len);
+		p += s->len + 1/*NUL*/;
+	}
+	pmemory(argv);
+	return argv;
+}
+
+static char **argv_from_exec_command(const char *command, struct verbose verbose)
+{
+	struct shunks *args = ttoshunks(shunk1(command), " ", EAT_EMPTY_SHUNKS);
+	if (args == NULL) {
+		return NULL;
+	}
+	char **argv = argv_from_shunks(args);
+	vassert(argv[args->len] == NULL);
+	pfree(args);
+	return argv;
+}
+
+static char **argv_from_sh_command(const char *command, struct verbose verbose)
+{
+	struct shunks *args = alloc_items(struct shunks, 3);
+	unsigned i = 0;
+	args->item[i++] = shunk1("/bin/sh");
+	args->item[i++] = shunk1("-c");
+	/* jam_updown_status() will print item[UPDOWN_SHELL_ARG] */
+	vassert(i == UPDOWN_SHELL_ARG);
+	args->item[i++] = shunk1(command);
+	vassert(i == args->len);
+	char **argv = argv_from_shunks(args);
+	pfree(args);
+	return argv;
+}
+
+static diag_t extract_updown(const struct whack_message *wm,
+			     enum end end,
+			     struct child_end_config *child_config,
+			     struct verbose verbose)
+{
+	diag_t d;
+	/*
+	 * Support for skipping updown, eg leftupdown="" or %disabled.
+	 *
+	 * Useful on busy servers that do not need to use updown for
+	 * anything.
+	 *
+	 * Need flags as they also affect how updown= is handled.
+	 */
+
+	d = extract_flags(kv(wm, end, KWS_UPDOWN_CONFIG),
+			  ARRAY_REF(child_config->updown.updown_config),
+			  &updown_config_names,
+			  verbose);
+	if (d != NULL) {
+		return d;
+	}
+
+	const struct kv updown_kv = kv(wm, end, KWS_UPDOWN);
+	char **updown_argv;
+	if (never_negotiate_string_option(updown_kv, verbose)) {
+		vdbg("never-negotiate updown");
+		updown_argv = NULL;
+	} else if (updown_kv.value == NULL) {
+		updown_argv = argv_from_sh_command(DEFAULT_UPDOWN, verbose);
+	} else if (streq(updown_kv.value, UPDOWN_DISABLED) ||
+		   streq(updown_kv.value, "")) {
+		/* disabled */
+		updown_argv = NULL;
+	} else if (child_config->updown.updown_config_exec) {
+		updown_argv = argv_from_exec_command(updown_kv.value, verbose);
+	} else {
+		updown_argv = argv_from_sh_command(updown_kv.value, verbose);
+	}
+	child_config->updown.argv = updown_argv;
+
+	VDBG_JAMBUF(buf) {
+		jam_string(buf, "argv =");
+		if (updown_argv != NULL) {
+			for (unsigned i = 0; updown_argv[i] != NULL; i++) {
+				jam_string(buf, " '");
+				jam_string(buf, updown_argv[i]);
+				jam_string(buf, "'");
+			}
+		}
+	}
+
+	return NULL;
+}
+
 static ip_addresses extract_addresses(struct kv kv,
 				      const struct ip_info *afi,
 				      diag_t *d,
@@ -2025,28 +2129,7 @@ static diag_t extract_child_end_config(const struct whack_message *wm,
 
 	child_config->protoport = protoport;
 
-	/*
-	 * Support for skipping updown, eg leftupdown="" or %disabled.
-	 *
-	 * Useful on busy servers that do not need to use updown for
-	 * anything.
-	 */
-	const struct kv updown_kv = kv(wm, end, KWS_UPDOWN);
-	if (never_negotiate_string_option(updown_kv, verbose)) {
-		vdbg("never-negotiate updown");
-	} else {
-		/* Note: "" disables updown; but no updown gets default */
-		child_config->updown.command =
-			(updown_kv.value == NULL ? clone_str(DEFAULT_UPDOWN, "default_updown") :
-			 streq(updown_kv.value, UPDOWN_DISABLED) ? NULL :
-			 streq(updown_kv.value, "") ? NULL :
-			 clone_str(updown_kv.value, "child_config.updown"));
-	}
-
-	d = extract_flags(kv(wm, end, KWS_UPDOWN_CONFIG),
-			  ARRAY_REF(child_config->updown.updown_config),
-			  &updown_config_names,
-			  verbose);
+	d = extract_updown(wm, end, child_config, verbose);
 	if (d != NULL) {
 		return d;
 	}
