@@ -90,6 +90,9 @@ extern bool report_leaks(struct logger *logger); /* true is bad */
 #define alloc_things(THING, COUNT, NAME)			\
 	((THING*) alloc_bytes(sizeof(THING) * (COUNT), (NAME)))
 
+#define overalloc_things(THING, COUNT, EXTRA)	\
+	((THING*) alloc_bytes(sizeof(THING) * (COUNT) + (EXTRA), #THING))
+
 #define realloc_things(THINGS, OLD_COUNT, NEW_COUNT, NAME)		\
 	{								\
 		void *things_ = THINGS;					\
