@@ -499,19 +499,48 @@ static void test_ike(struct logger *logger)
 	ike(false, "3des-id2"); /* should be rejected; idXXX removed */
 	ike(false, "aes_ccm"); /* ESP/AH only */
 
-	/* quads: <encrypt>-<integ>-<prf>[-;]<kem> */
+	/*
+	 * Old quad, expect a warning:
+	 *  <encrypt>-<fqn-integ>-<prf>[-;]<kem>
+	 * New quad:
+	 *  <encrypt>-<prf>-<fqn-integ>[-;]<kem>
+	 * Either way, need to be able to clearly differentiate
+	 * between <prf> and <integ>.
+	 */
 
-	/* can't follow valid <prf> with <integ> */
+	printf("bad: <prf>-<prf>\n");
 	ike(false, "aes-sha1-sha2-ecp_521");
 	ike(false, "aes-sha2-sha2;ecp_521");
-	/* good; integ forced by fqn sha1_96 */
+
+	printf("bad: <integ>-<integ>\n");
+	ike(false, "aes-sha1_96-sha2_256_128-ecp_521");
+
+	printf("%s: <fqn-integ>-<prf>; OLD IKEv2 SYNTAX; WARNING in 5.4\n",
+	       (ike_version == IKEv2 ? "good" : "bad"));
+	ike(ike_version == IKEv2, "aes-sha1_96-sha1-ecp_521"); /* merges prf/integ */
 	ike(ike_version == IKEv2, "aes-sha1_96-sha2-ecp_521");
 	ike(ike_version == IKEv2, "aes-sha1_96-sha2;ecp_521");
-	/* need to back out all PRFs */
+
+	printf("%s: <prf>-<fqn-integ>; NEW IKEv2 SYNTAX; OK in 5.4\n",
+	       (ike_version == IKEv2 ? "good" : "bad"));
+	ike(ike_version == IKEv2, "aes-sha1-sha1_96-ecp_521");
+	ike(ike_version == IKEv2, "aes-sha2-sha1_96-ecp_521");
+
+	printf("%s: <prf>-<fqn-integ>; OLD IKEv2 SYNTAX; WARNING in 5.4\n",
+	       (ike_version == IKEv2 ? "good" : "bad"));
 	ike(ike_version == IKEv2, "aes-sha2_256+sha1_96");
+
+	printf("%s: <prf>+<fqn-integ>-<prf>; OLD IKEv2 SYNTAX; WARNING in 5.4; <prf>+<fqn-integ>==<fqn-integ>\n",
+	       (ike_version == IKEv2 ? "good" : "bad"));
 	ike(ike_version == IKEv2, "aes-sha2_256+sha1_96-sha2_512");
 	ike(ike_version == IKEv2, "aes-sha2_256+sha1_96-sha2_512-ecp_521");
 	ike(ike_version == IKEv2, "aes-sha2_256+sha1_96-sha2_512;ecp_521");
+
+	printf("%s: <prf>+<fqn-integ>-<prf>; NEW IKEv2 SYNTAX; OK in 5.4; <prf>+<fqn-integ>==<fqn-integ>\n",
+	       (ike_version == IKEv2 ? "good" : "bad"));
+	ike(ike_version == IKEv2, "aes-sha2_512-sha2_256+sha1_96");
+	ike(ike_version == IKEv2, "aes-sha2_512-sha2_256+sha1_96-ecp_521");
+	ike(ike_version == IKEv2, "aes-sha2_512-sha2_256+sha1_96;ecp_521");
 
 	/* toss duplicates */
 
