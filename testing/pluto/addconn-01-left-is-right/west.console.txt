@@ -7,10 +7,12 @@ west #
  ../../guestbin/wait-until-pluto-started
 west #
  ipsec add --config missing-prefix.conf   missing-prefix
-ipsec add: FATAL ERROR: missing-prefix.conf:6: keyword "subnet" requires "left" or "right" prefix
+ipsec add: ERROR: missing-prefix.conf:6: keyword "subnet" requires "left" or "right" prefix
+ipsec add: loading config file 'missing-prefix.conf' failed
 west #
  ipsec add --config implied-prefix.conf   implied-prefix
-ipsec add: FATAL ERROR: implied-prefix.conf:5: keyword "updown" requires "left" or "right" prefix
+ipsec add: ERROR: implied-prefix.conf:5: keyword "updown" requires "left" or "right" prefix
+ipsec add: loading config file 'implied-prefix.conf' failed
 west #
  ipsec connectionstatus implied-prefix   | grep updown
 west #

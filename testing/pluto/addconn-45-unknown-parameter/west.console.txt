@@ -12,7 +12,7 @@ west #
 west #
  ipsec addconn --config /dne.conf connection
 ipsec addconn: ERROR: could not open '/dne.conf': No such file or directory (errno 2)
-ipsec addconn: loading config file '/dne.conf' failed
+ipsec addconn: ERROR: loading config file '/dne.conf' failed
 west #
  # fail as nothing to do
 west #
@@ -34,10 +34,9 @@ west #
 west #
  # will fail
 west #
- ipsec pluto --no-leak-detective --config bad-config-setup-key.conf
-ipsec pluto: warning: --no-leak-detective is deprecated and will be removed in a future release
-FATAL ERROR: ipsec pluto: bad-config-setup-key.conf:7: unrecognized 'config setup' keyword 'unknown'
-systemd watchdog: sending action: stopping, status 1
+ ipsec pluto --config bad-config-setup-key.conf
+ERROR: ipsec pluto: bad-config-setup-key.conf:7: unrecognized 'config setup' keyword 'unknown'
+ERROR: ipsec pluto: option --config 'bad-config-setup-key.conf' invalid, cannot load config file 'bad-config-setup-key.conf'
 west #
  # should fail but doesn't, hence shutdown
 west #
@@ -63,10 +62,9 @@ west #
 west #
  # will fail
 west #
- ipsec pluto --leak-detective=no --config bad-conn-key.conf
-ipsec pluto: warning: --leak-detective=no is deprecated; use --no-leak-detective instead (temporarily)
-FATAL ERROR: ipsec pluto: bad-conn-key.conf:9: unrecognized 'conn' keyword 'unknown'
-systemd watchdog: sending action: stopping, status 1
+ ipsec pluto --config bad-conn-key.conf
+ERROR: ipsec pluto: bad-conn-key.conf:9: unrecognized 'conn' keyword 'unknown'
+ERROR: ipsec pluto: option --config 'bad-conn-key.conf' invalid, cannot load config file 'bad-conn-key.conf'
 west #
  # should fail?
 west #
@@ -97,7 +95,8 @@ west #
  journalctl --output cat -xeu ipsec.service | grep -e FATAL -e warning
 west #
  ipsec addconn --config bad-conn-key.conf    bad-conn-key
-ipsec addconn: FATAL ERROR: bad-conn-key.conf:9: unrecognized 'conn' keyword 'unknown'
+ipsec addconn: ERROR: bad-conn-key.conf:9: unrecognized 'conn' keyword 'unknown'
+ipsec addconn: ERROR: loading config file 'bad-conn-key.conf' failed
 west #
  ipsec addconn --config bad-conn-value.conf  bad-conn-value
 warning: "bad-conn-value": debug=asdlfasdfj invalid, ignored
