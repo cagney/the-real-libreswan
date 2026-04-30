@@ -505,13 +505,13 @@ int main(int argc, char *argv[])
 		}
 		cfg = confread_load_argv(configfile, name, argv, optind, logger, verbose);
 		if (cfg == NULL) {
-			llog(RC_LOG, logger, "parsing config arguments failed");
+			llog(ERROR_STREAM, logger, "parsing config arguments failed");
 			exit(3);
 		}
 	} else {
 		cfg = confread_load(configfile, (configsetup.name != NULL), logger, verbose);
 		if (cfg == NULL) {
-			llog(RC_LOG, logger, "loading config file '%s' failed", configfile);
+			llog(ERROR_STREAM, logger, "loading config file '%s' failed", configfile);
 			exit(3);
 		}
 	}

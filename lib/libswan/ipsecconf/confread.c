@@ -128,7 +128,7 @@ static bool translate_field(struct starter_conn *conn,
 			}
 		}
 		if (addin == NULL) {
-			llog(RC_LOG, logger,
+			llog(ERROR_STREAM, logger,
 			     "cannot find conn '%s' needed by conn '%s'",
 			     seeking, conn->name);
 			ok = false;
@@ -141,24 +141,26 @@ static bool translate_field(struct starter_conn *conn,
 	case kt_string:
 		/* all treated as strings for now, even loose enums */
 		if (values[field].set == k_set) {
-			llog(RC_LOG, logger,
-			     "duplicate key '%s%s' in conn %s while processing def %s",
-			     leftright, kw->keyval.key->keyname,
-			     conn->name,
-			     sl->name);
-
 			/* only fatal if we try to change values */
 			if (kw->keyval.val == NULL ||
 			    values[field].string == NULL ||
 			    !streq(kw->keyval.val, values[field].string)) {
 				ok = false;
+			}
+			llog((ok ? WARNING_STREAM : ERROR_STREAM), logger,
+			     "duplicate key '%s%s' in conn %s while processing def %s",
+			     leftright, kw->keyval.key->keyname,
+			     conn->name,
+			     sl->name);
+
+			if (!ok) {
 				break;
 			}
 		}
 		pfreeany(values[field].string);
 
 		if (kw->keyval.val == NULL) {
-			llog(RC_LOG, logger, "invalid %s value",
+			llog(ERROR_STREAM, logger, "invalid %s value",
 			     kw->keyval.key->keyname);
 			ok = false;
 			break;
@@ -193,15 +195,17 @@ static bool translate_field(struct starter_conn *conn,
 	case kt_unsigned:
 		/* all treated as a number for now */
 		if (values[field].set == k_set) {
-			llog(RC_LOG, logger,
+			/* only fatal if we try to change values */
+			if (values[field].option != (int)kw->number) {
+				ok = false;
+			}
+			llog((ok ? WARNING_STREAM : ERROR_STREAM), logger,
 			     "duplicate key '%s%s' in conn %s while processing def %s",
 			     leftright, kw->keyval.key->keyname,
 			     conn->name,
 			     sl->name);
 
-			/* only fatal if we try to change values */
-			if (values[field].option != (int)kw->number) {
-				ok = false;
+			if (!ok) {
 				break;
 			}
 		}
@@ -213,15 +217,18 @@ static bool translate_field(struct starter_conn *conn,
 	case kt_seconds:
 		/* all treated as a number for now */
 		if (values[field].set == k_set) {
-			llog(RC_LOG, logger,
+			/* only fatal if we try to change values */
+			if (deltatime_cmp(values[field].deltatime, !=, kw->deltatime)) {
+				ok = false;
+			}
+			llog((ok ? WARNING_STREAM : ERROR_STREAM), logger,
 			     "duplicate key '%s%s' in conn %s while processing def %s",
 			     leftright, kw->keyval.key->keyname,
 			     conn->name,
 			     sl->name);
 
 			/* only fatal if we try to change values */
-			if (deltatime_cmp(values[field].deltatime, !=, kw->deltatime)) {
-				ok = false;
+			if (!ok) {
 				break;
 			}
 		}
@@ -320,7 +327,7 @@ static bool load_conn(struct starter_conn *conn,
 
 	if (conn->values[KSCF_ALSO].string != NULL &&
 	    !alsoprocessing) {
-		llog(RC_LOG, logger, "also= is not valid in section '%s'",
+		llog(ERROR_STREAM, logger, "also= is not valid in section '%s'",
 		     sl->name);
 		return false;	/* error */
 	}

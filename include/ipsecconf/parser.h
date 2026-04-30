@@ -123,9 +123,6 @@ struct parser {
 void parser_warning(struct parser *parser, int eerror/*can be 0*/,
 		    const char *s, ...) PRINTF_LIKE(3);
 
-void parser_fatal(struct parser *parser, int eerror/*can be 0*/,
-		  const char *s, ...) PRINTF_LIKE(3) NEVER_RETURNS;
-
 struct ipsec_conf *alloc_ipsec_conf(void);
 
 bool ipsec_conf_add_file(struct ipsec_conf *ipsec_conf,

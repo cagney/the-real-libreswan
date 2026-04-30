@@ -45,12 +45,15 @@
 #define YYERROR_VERBOSE
 #define ERRSTRING_LEN	256
 
+static void parser_error(struct parser *parser, int eerror/*can be 0*/,
+			 const char *s, ...) PRINTF_LIKE(3);
+
 static void parser_key_value_warning(struct parser *parser,
 				     const struct ipsec_conf_keyval *key,
 				     shunk_t value,
 				     const char *s, ...) PRINTF_LIKE(4);
 
-void parse_keyval(struct parser *parser, enum end default_end,
+bool parse_keyval(struct parser *parser, enum end default_end,
 		  shunk_t key, shunk_t value);
 
 static void yyerror(struct parser *parser, const char *msg);
@@ -158,22 +161,31 @@ statement_kw:
 		 */
 		char *key = $1; /* must free? */
 		char *value = $3; /* must free */
-		parse_keyval(parser, END_ROOF, shunk1(key), shunk1(value));
+		bool ok = parse_keyval(parser, END_ROOF, shunk1(key), shunk1(value));
 		pfreeany(key);
 		pfreeany(value);
+		if (!ok) {
+			return 1;/*error*/
+		}
 	}
 	| KEYWORD EQUAL STRING {
 		char *key = $1;
 		char *value = $3;
-		parse_keyval(parser, END_ROOF, shunk1(key), shunk1(value));
+		bool ok = parse_keyval(parser, END_ROOF, shunk1(key), shunk1(value));
 		/* free strings allocated by lexer */
 		pfreeany(key);
 		pfreeany(value);
+		if (!ok) {
+			return 1;/*error*/
+		}
 	}
 	| KEYWORD EQUAL {
 		char *key = $1;
-		parse_keyval(parser, END_ROOF, shunk1(key), shunk1(""));
+		bool ok = parse_keyval(parser, END_ROOF, shunk1(key), shunk1(""));
 		pfreeany(key);
+		if (!ok) {
+			return 1;/*error*/
+		}
 	}
 
 	| COMMENT EQUAL STRING {
@@ -211,9 +223,9 @@ void parser_warning(struct parser *parser, int error, const char *s, ...)
 	}
 }
 
-void parser_fatal(struct parser *parser, int error, const char *s, ...)
+void parser_error(struct parser *parser, int error, const char *s, ...)
 {
-	LLOG_FATAL_JAMBUF(PLUTO_EXIT_FAIL, parser->logger, buf) {
+	LLOG_JAMBUF(ERROR_STREAM, parser->logger, buf) {
 		jam_scanner_file_line(buf, parser);
 		va_list ap;
 		va_start(ap, s);
@@ -223,7 +235,6 @@ void parser_fatal(struct parser *parser, int error, const char *s, ...)
 			jam_errno(buf, error);
 		}
         }
-	abort(); /* gcc doesn't believe above always exits */
 }
 
 static const char *leftright(const struct ipsec_conf_keyval *keyval)
@@ -347,6 +358,7 @@ bool ipsec_conf_add_argv_conn(struct ipsec_conf *ipsec_conf,
 	/* for options that should have an end, but don't */
 	enum end default_end = LEFT_END;
 
+	bool ok = true;
 	for (char **argp = argv + start; (*argp) != NULL; argp++) {
 
 		const char *const arg = (*argp);
@@ -365,25 +377,33 @@ bool ipsec_conf_add_argv_conn(struct ipsec_conf *ipsec_conf,
 			default_end++;
 			if (default_end >= END_ROOF) {
 				llog(ERROR_STREAM, logger, "too many '--to's");
-				pfree_ipsec_conf(&parser.cfg);
-				exit(1);
+				ok = false;
+				break;
 			}
 			scanner_next_line(&parser);
 			continue;
 		}
 
 		if (whack && hunk_streat(&cursor, "nego")) {
-			parse_keyval(&parser, default_end,
-				     shunk1("negotiationshunt"),
-				     cursor);
+			if (!parse_keyval(&parser, default_end,
+					  shunk1("negotiationshunt"),
+					  cursor)) {
+				/* already logged */
+				ok = false;
+				break;
+			}
 			scanner_next_line(&parser);
 			continue;
 		}
 
 		if (whack && hunk_streat(&cursor, "fail")) {
-			parse_keyval(&parser, default_end,
-				     shunk1("failureshunt"),
-				     cursor);
+			if (!parse_keyval(&parser, default_end,
+					  shunk1("failureshunt"),
+					  cursor)) {
+				/* already logged */
+				ok = false;
+				break;
+			}
 			scanner_next_line(&parser);
 			continue;
 		}
@@ -402,7 +422,8 @@ bool ipsec_conf_add_argv_conn(struct ipsec_conf *ipsec_conf,
 			/* only allow --KEY VALUE when whack compat */
 			if (argp[1] == NULL) {
 				llog(ERROR_STREAM, logger, "missing argument for %s", arg);
-				return false;
+				ok = false;
+				break;
 			}
 			/* skip/use next arg */
 			argp++;
@@ -410,8 +431,8 @@ bool ipsec_conf_add_argv_conn(struct ipsec_conf *ipsec_conf,
 			scanner_next_line(&parser);
 		} else {
 			llog(ERROR_STREAM, logger, "missing '=' in %s", arg);
-			pfree_ipsec_conf(&parser.cfg);
-			exit(1);
+			ok = false;
+			break;
 		}
 
 		/*
@@ -430,12 +451,16 @@ bool ipsec_conf_add_argv_conn(struct ipsec_conf *ipsec_conf,
 			key = shunk1("auth");
 		}
 
-		parse_keyval(&parser, default_end, key, value);
+		if (!parse_keyval(&parser, default_end, key, value)) {
+			/* already logged */
+			ok = false;
+			break;
+		}
 		scanner_next_line(&parser);
 	}
 
 	scanner_close(&parser);
-	return true;
+	return ok;
 }
 
 static void pfree_keyval_list(struct keyval_list *list)
@@ -650,9 +675,15 @@ static bool parse_leftright(shunk_t s,
 }
 
 /* type is really "token" type, which is actually int */
-static bool parser_find_key(shunk_t skey, enum end default_end,
-			    struct ipsec_conf_keyval *key,
-			    struct parser *parser)
+enum key_lookup {
+	KEY_FOUND,
+	KEY_IGNORED,
+	KEY_INVALID,
+};
+
+static enum key_lookup parser_find_key(shunk_t skey, enum end default_end,
+				       struct ipsec_conf_keyval *key,
+				       struct parser *parser)
 {
 	bool left = false;
 	bool right = false;
@@ -713,9 +744,10 @@ static bool parser_find_key(shunk_t skey, enum end default_end,
 					break;
 				}
 
-				parser_fatal(parser, 0, "keyword \"%s\" requires \"left\" or \"right\" prefix",
+				parser_error(parser, 0,
+					     "keyword \"%s\" requires \"left\" or \"right\" prefix",
 					     k->keyname);
-				return false;
+				return KEY_INVALID;
 			}
 			found = k;
 			break;
@@ -737,23 +769,23 @@ static bool parser_find_key(shunk_t skey, enum end default_end,
 
 	/* if we still found nothing */
 	if (found == NULL) {
-		parser_fatal(parser, /*errno*/0, "unrecognized '%s' keyword '"PRI_SHUNK"'",
+		parser_error(parser, /*errno*/0,
+			     "unrecognized '%s' keyword '"PRI_SHUNK"'",
 			     str_parser_section(parser), pri_shunk(skey));
-		/* never returns */
-		return false;
+		return KEY_INVALID;
 	}
 
 	if (found->validity & kv_optarg_only) {
-		parser_fatal(parser, /*errno*/0, "'%s' keyword '"PRI_SHUNK"' invalid; use command line option",
+		parser_error(parser, /*errno*/0,
+			     "'%s' keyword '"PRI_SHUNK"' invalid; use command line option",
 			     str_parser_section(parser), pri_shunk(skey));
-		/* never returns */
-		return false;
+		return KEY_INVALID;
 	}
 
 	if (found->validity & kv_nosup) {
 		parser_warning(parser, /*errno*/0, "'%s' keyword '"PRI_SHUNK"' unsupported; ignored",
 			       str_parser_section(parser), pri_shunk(skey));
-		return false;
+		return KEY_IGNORED;
 	}
 
 	/* else, set up llval.k to point, and return KEYWORD */
@@ -762,15 +794,20 @@ static bool parser_find_key(shunk_t skey, enum end default_end,
 	key->right = right;
 	key->val = NULL; /* later */
 	key->sal = scanner_sal(parser);
-	return true;
+	return KEY_FOUND;
 }
 
-void parse_keyval(struct parser *parser, enum end default_end,
+bool parse_keyval(struct parser *parser, enum end default_end,
 		  shunk_t skey, shunk_t value)
 {
 	struct ipsec_conf_keyval key;
-	if (!parser_find_key(skey, default_end, &key, parser)) {
-		return;
+	switch (parser_find_key(skey, default_end, &key, parser)) {
+	case KEY_INVALID:
+		return false;
+	case KEY_IGNORED:
+		return true; /* stumble on */
+	case KEY_FOUND:
+		break; /* continue */
 	}
 
 	/* fill in once look succeeds */
@@ -784,7 +821,7 @@ void parse_keyval(struct parser *parser, enum end default_end,
 		 * Note: this includes duplicate keywords.
 		 */
 		append_parser_key_value(parser, &key, value, 0, (deltatime_t){0});
-		return;
+		return true;
 	}
 
 	uintmax_t number = 0;		/* neutral placeholding value */
@@ -815,7 +852,7 @@ void parse_keyval(struct parser *parser, enum end default_end,
 	case kt_obsolete:
 		/* drop it on the floor */
 		parser_key_value_warning(parser, &key, value, "obsolete keyword ignored");
-		return;
+		return true; /* ignore warning */
 
 	}
 
@@ -825,8 +862,9 @@ void parse_keyval(struct parser *parser, enum end default_end,
 		     pri_keyval_sal(&key), str_diag(d),
 		     leftright(&key), key.key->keyname, pri_shunk(value));
 		pfree_diag(&d);
-		return;
+		return true; /* ignore warning */
 	}
 
 	add_parser_key_value(parser, &key, value, number, deltatime);
+	return true;
 }
