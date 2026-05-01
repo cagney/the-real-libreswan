@@ -33,7 +33,8 @@ PATH=$PATH:/tmp ipsec pluto --config /etc/ipsec.conf --logfile /tmp/pluto.log
 ../../guestbin/wait-until-pluto-started
 
 # usage: sleep connection
-AD() { rm -f /tmp/updown.env ; ipsec add --auto=route $2 ; sleep $1 ; grep -e PLUTO_ARGV= -e PATH= -e PLUTO_VERB= -e PLUTO_CONNECTION= /tmp/updown.env ; ipsec delete $2 ; }
+
+AD() { rm -f /tmp/updown.env ; ipsec add --auto=route $2 ; ipsec connectionstatus $2 | sed -n -e '/: .*updown=/ s/  */ /gp' ; sleep $1 ; grep -e PLUTO_ARGV= -e PATH= -e PLUTO_VERB= -e PLUTO_CONNECTION= /tmp/updown.env ; ipsec delete $2 ; }
 
 AD 0 addconn--updown=/tmp/updown.sh
 AD 0 addconn--updown=/tmp/updown.sh--updown-config=exec
