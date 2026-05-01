@@ -32,7 +32,6 @@
 #include <errno.h>
 #include <event2/event.h>	/* rpm:libevent-devel deb:libevent-dev */
 #include <unbound.h>		/* rpm:unbound-devel deb:libunbound-dev */
-#include <unbound-event.h>	/* ditto */
 
 #include "lswglob.h"
 #include "lswalloc.h"
