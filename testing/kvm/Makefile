@@ -637,7 +637,7 @@ kvm-keys:
 
 $(KVM_KEYS): $(KVM_TESTINGDIR)/x509/selfsigned.sh
 $(KVM_KEYS): $(KVM_TESTINGDIR)/x509/generate.sh
-$(KVM_KEYS): $(KVM_TESTINGDIR)/baseconfigs/all/etc/bind/generate-dnssec.sh
+$(KVM_KEYS): $(KVM_TESTINGDIR)/dnssec/generate-dnssec.sh
 $(KVM_KEYS): | $(KVM_KEYS_DOMAIN)
 $(KVM_KEYS): | $(KVM_HOST_OK)
 	:
@@ -647,7 +647,7 @@ $(KVM_KEYS): | $(KVM_HOST_OK)
 	:
 	: Also regenerate the DNSSEC keys
 	:
-	$(KVMSH) --chdir /testing $(notdir $(KVM_KEYS_DOMAIN)) ./baseconfigs/all/etc/bind/generate-dnssec.sh
+	$(KVMSH) $(notdir $(KVM_KEYS_DOMAIN)) /testing/dnssec/generate-dnssec.sh
 	:
 	: All done.
 	:
@@ -659,11 +659,10 @@ kvm-clean-keys:
 	: careful output mixed with repo files
 	rm -rf $(KVM_TESTINGDIR)/x509/*/
 	rm -f $(KVM_KEYS)
-	rm -f $(KVM_TESTINGDIR)/baseconfigs/all/etc/bind/signed/*.signed
-	rm -f $(KVM_TESTINGDIR)/baseconfigs/all/etc/bind/keys/*.key
-	rm -f $(KVM_TESTINGDIR)/baseconfigs/all/etc/bind/keys/*.private
-	rm -f $(KVM_TESTINGDIR)/baseconfigs/all/etc/bind/dsset/dsset-*
-	rm -f $(KVM_POOLDIR)/$(KVM_PREFIX)kvm-keys.tar
+	rm -f $(KVM_TESTINGDIR)/dnssec/signed/*.signed
+	rm -f $(KVM_TESTINGDIR)/dnssec/keys/*.key
+	rm -f $(KVM_TESTINGDIR)/dnssec/keys/*.private
+	rm -f $(KVM_TESTINGDIR)/dnssec/dsset/dsset-*
 
 # For moment don't force keys to be re-built.
 .PHONY: kvm-keys-ok

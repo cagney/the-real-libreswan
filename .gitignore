@@ -23,8 +23,8 @@ osxApp/build
 Makefile.inc.local
 .ycm_extra_conf.py
 cscope.out
-testing/baseconfigs/all/etc/bind/signed/*.signed
-testing/baseconfigs/all/etc/bind/keys/*.key
-testing/baseconfigs/all/etc/bind/keys/*.private
-testing/baseconfigs/all/etc/bind/dsset/dsset*
+testing/dnssec/signed/*.signed
+testing/dnssec/keys/*.key
+testing/dnssec/keys/*.private
+testing/dnssec/dsset/dsset*
 nohup.out
