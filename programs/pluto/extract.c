@@ -560,7 +560,7 @@ static diag_t extract_flags(struct kv kv,
 			    const struct enum_names *names,
 			    struct verbose verbose)
 {
-	if (!never_negotiate_string_option(kv, verbose)) {
+	if (never_negotiate_string_option(kv, verbose)) {
 		return NULL;
 	}
 
@@ -627,13 +627,10 @@ static diag_t extract_updown(const struct whack_message *wm,
 			     struct verbose verbose)
 {
 	diag_t d;
+
 	/*
-	 * Support for skipping updown, eg leftupdown="" or %disabled.
-	 *
-	 * Useful on busy servers that do not need to use updown for
-	 * anything.
-	 *
-	 * Need flags as they also affect how updown= is handled.
+	 * Need to extract updown-config= flags first; they affect how
+	 * updown= is handled.
 	 */
 
 	d = extract_flags(kv(wm, end, KWS_UPDOWN_CONFIG),
@@ -643,6 +640,13 @@ static diag_t extract_updown(const struct whack_message *wm,
 	if (d != NULL) {
 		return d;
 	}
+
+	/*
+	 * Support for skipping updown, eg leftupdown="" or %disabled.
+	 *
+	 * Useful on busy servers that do not need to use updown for
+	 * anything.
+	 */
 
 	const struct kv updown_kv = kv(wm, end, KWS_UPDOWN);
 	char **updown_argv;
