@@ -18,6 +18,7 @@ LC_CTYPE=C
 export LC_CTYPE
 
 # default to hidden output
+
 echo ==== cut ====
 
 # Install NSD and UNBOUND config files into a tmpfs mounted
@@ -25,15 +26,28 @@ echo ==== cut ====
 #
 # NSD only requires a few tweaks; UNBOUND replaces everything :-/
 
-for d in etc/nsd/conf.d etc/nsd/server.d etc/unbound ; do
+tmpfs_mount() {
+    local d=$1
     echo tmpfs mounting $d:
-    umount /$d || true
-    mount -t tmpfs tmpfs /$d
+    mkdir -p $d || true
+    umount $d || true
+    mount -t tmpfs tmpfs $d
+}
+
+for d in etc/nsd/conf.d etc/nsd/server.d etc/unbound ; do
+    tmpfs_mount /$d
     cp -av /testing/baseconfigs/all/$d/* /$d
     restorecon -R /$d
 done
 
+for d in etc/nsd/zones ; do
+    tmpfs_mount /$d
+    cp -va /testing/dnssec/zones/* /$d/
+    restorecon -R /$d
+done
+
 # same for /var/run
+
 for d in /run/nsd /run/unbound ; do
     echo tmpfs mounting $d:
     umount $d || true
