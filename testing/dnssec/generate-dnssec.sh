@@ -55,7 +55,7 @@ for zone in ${zones} ; do
     for subzone in *.${zone} ; do
 	cat dsset/dsset-${subzone}. >> zones/${zone}
     done
-    ./sign-zone.sh $zone
+    ./sign-zone.sh zones/$zone
 done
 
 # Sign the subzones.
@@ -67,7 +67,7 @@ done
 for zone in ${zones} ; do
     for subzone in *.${zone} ; do
 	cp ${subzone} zones/${subzone}
-	./sign-zone.sh ${subzone}
+	./sign-zone.sh zones/${subzone}
     done
 done
 

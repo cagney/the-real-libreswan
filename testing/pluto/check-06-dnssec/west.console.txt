@@ -41,3 +41,15 @@ west #
  echo done
 done
 west #
+ dig +short @192.1.2.254 -p 5353 right.testing.libreswan.org # NSD
+192.1.2.23
+west #
+ dig +short @192.1.2.254         right.testing.libreswan.org # UNBOUND
+192.1.2.23
+west #
+ dig +short @192.1.2.254 -p 5353 right.testing.libreswan.org # NSD
+192.1.2.45
+west #
+ dig +short @192.1.2.254         right.testing.libreswan.org # UNBOUND
+192.1.2.45
+west #

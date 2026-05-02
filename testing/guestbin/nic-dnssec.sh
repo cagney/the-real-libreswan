@@ -43,6 +43,7 @@ done
 for d in etc/nsd/zones ; do
     tmpfs_mount /$d
     cp -va /testing/dnssec/zones/* /$d/
+    chown root /$d/*
     restorecon -R /$d
 done
 

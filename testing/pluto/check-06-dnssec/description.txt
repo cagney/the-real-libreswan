@@ -1,1 +1,4 @@
-This is test for dnssec working in the test envirmet. No pluto used
+Check that NIC's DNSSEC NIC works from EAST/WEST.
+
+In addition, demonstrate an update and then re-sign of
+right.testing.libreswan.org.

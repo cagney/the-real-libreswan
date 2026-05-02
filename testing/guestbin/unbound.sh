@@ -1,23 +1,24 @@
 #!/bin/sh
+
 set -eu
 
 verbose=${verbose-''}
-UNBOUND_OPTIONS=${UNBOUND_OPTIONS-''}
 
-PIDFile=/run/unbound/unbound.pid
+PIDFILE=/var/run/unbound/unbound.pid
 
 if [ "${verbose}" = "yes" ]; then
         set -x
 fi
 
 function err() {
-        local exitcode=$1
-        shift
-        echo "ERROR: $@" >&2
-        exit $exitcode
+    local exitcode=$1
+    shift
+    echo "ERROR: $@" >&2
+    exit $exitcode
 }
+
 usage() {
-        echo "usage $0\n"
+        echo "usage\n"
 }
 
 function info() {
@@ -27,23 +28,18 @@ function info() {
 }
 
 function start() {
-	# fork and run in the background
-	/usr/sbin/unbound $UNBOUND_OPTIONS
+    # next lines are combination nsd-keygen.service and nsd.service
+    /usr/sbin/unbound
 }
 
 function stop() {
-	[ -f ${PIDFile} ] && \
-		(ps -p $(cat ${PIDFile}) && kill -TERM $(cat ${PIDFile}) && \
-		rm ${PIDFile}) || true
-}
-
-function restart() {
-	stop
-	start
+    pid=$(cat ${PIDFILE})
+    ps -p ${pid} && kill -TERM ${pid} && rm -f ${PIDFILE}
 }
 
 function reload() {
-	ps -p $(cat ${PIDFile}) && kill -HUP $(cat ${PIDFile})
+    pid=$(cat ${PIDFILE})
+    kill -HUP ${pid}
 }
 
 OPTIONS=$(getopt -o hgvs: --long verbose,start,stop,restart,reload,help -- "$@")
@@ -69,28 +65,21 @@ done
 
 case "$1" in
 
-	start )
-		start $@
-		shift
-		;;
-	stop )
-		stop $@
-		shift
-		;;
-	reload )
-		reload $@
-		shift
-		;;
+    start )
+	start
+	;;
+    stop )
+	stop
+	;;
+    reload )
+	reload
+	;;
+    restart )
+	stop
+	start
+	;;
 
-	restart )
-		restart $@
-		shift
-		;;
-
-	*)
-		err 1 "Unknown option $1"
-		shift
-		break
-		;;
+    *)
+	err 1 "Unknown option $1"
+	;;
 esac
-
