@@ -1,0 +1,25 @@
+/testing/guestbin/prep.sh
+west.conf -> /etc/ipsec.conf
+west.secrets -> /etc/ipsec.secrets
+resolv.conf -> /etc/resolv.conf
+west #
+ ipsec start
+Redirecting to: [initsystem]
+west #
+ ../../guestbin/wait-until-pluto-started
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named": oriented'
+"named": oriented IKEv2 connection (local: left=192.1.2.45 remote: right=right.testing.libreswan.org)
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named" #1: initiating'
+"named" #1: initiating IKEv2 connection to 192.1.2.23 (right.testing.libreswan.org) using UDP
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named" #1: initiator established IKE SA'
+"named" #1: initiator established IKE SA; authenticated peer using authby=secret and FQDN '@east'
+west #
+ ../../guestbin/wait-for-pluto.sh --match '"named" #2: initiator established Child SA'
+"named" #2: initiator established Child SA using #1; IPsec tunnel [192.0.1.0/24===192.0.2.0/24] {ESP/ESN=>0xESPESP <0xESPESP xfrm=AES_GCM_16_256 DPD=passive}
+west #
+ ipsec trafficstatus
+#2: "named", type=ESP, add_time=1234567890, inBytes=0, outBytes=0, maxBytes=2^63B, id='@east'
+west #

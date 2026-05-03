@@ -1,5 +1,7 @@
-/testing/guestbin/swan-prep --nokeys
-Creating empty NSS database
+/testing/guestbin/prep.sh
+east.conf -> /etc/ipsec.conf
+east.secrets -> /etc/ipsec.secrets
+resolv.conf -> /etc/resolv.conf
 east #
  ipsec start
 Redirecting to: [initsystem]
@@ -12,10 +14,6 @@ east #
  echo "initdone"
 initdone
 east #
- ipsec whack --trafficstatus
+ ipsec trafficstatus
 #2: "named", type=ESP, add_time=1234567890, inBytes=0, outBytes=0, maxBytes=2^63B, id='@west'
-east #
- # clean up after ourselves
-east #
- rm -f /etc/systemd/system/unbound.service
 east #

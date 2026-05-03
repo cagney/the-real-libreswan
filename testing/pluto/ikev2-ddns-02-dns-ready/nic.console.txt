@@ -1,0 +1,18 @@
+/testing/guestbin/nic-dnssec.sh start
+starting dns
+digging for road.testing.libreswan.org IPSECKEY
+Everything went well, including things like NXDOMAIN.
+Found 2 records
+nic #
+ echo right.testing.libreswan.org. IN A 192.1.2.23 >> /etc/nsd/zones/testing.libreswan.org
+nic #
+ /testing/dnssec/sign-zone.sh /etc/nsd/zones/testing.libreswan.org
+/etc/nsd/zones/testing.libreswan.org.signed
+nic #
+ /testing/guestbin/nsd.sh reload
+nic #
+ /testing/guestbin/unbound.sh reload
+nic #
+ ipsec trafficstatus
+ipsec whack: ERROR: Pluto is not running (no "/run/pluto/pluto.ctl"): No such file or directory (errno 2)
+nic #
